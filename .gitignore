@@ -1,0 +1,17 @@
+Python bytecode and cache
+pycache/
+*.pyc
+
+Virtual environment folders
+venv/
+.venv/
+env/
+.env
+
+IDE and editor folders
+.vscode/
+.idea/
+
+OS-specific files
+.DS_Store
+Thumbs.db
