@@ -9,25 +9,28 @@ from app_utils import (
     get_feature_importance_explanation,
 )
 
-# --- Application Setup ---
 app = FastAPI(
     title="Specialized ASD Screening API",
     description="An API with specialized models for toddlers and the general population.",
-    version="2.2.0",  # Version bump
+    version="2.2.0",
 )
 app_data = {}
 
-# --- CORS Middleware ---
+origins = [
+    "http://localhost:8080",  # Your local frontend development server
+    "https://autism-prediction-frontend.vercel.app",  # Your deployed frontend URL
+]
+
+# Allow the frontend (running on a different origin) to communicate with this API.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=origins,  # Use the specific list of origins
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
 
-# --- Pydantic Models ---
 class ScreeningData(BaseModel):
     isToddler: bool
     Age: int = Field(..., gt=0)
@@ -52,24 +55,26 @@ class PredictionResult(BaseModel):
     explanation: List[str]
 
 
-# --- API Events ---
 @app.on_event("startup")
 def startup_event():
+    """
+    Loads all machine learning assets into memory once when the server starts.
+    """
     global app_data
     app_data = load_all_models_and_artifacts()
 
 
-# --- API Endpoints ---
 @app.get("/", tags=["General"])
 def read_root():
+    """A simple endpoint to check if the API is running."""
     return {"message": "Welcome to the Specialized ASD Screening API."}
 
 
 @app.post("/predict/", response_model=List[PredictionResult], tags=["Prediction"])
 def predict(data: ScreeningData):
     """
-    Routes the prediction to the correct set of models based on the 'isToddler' flag.
-    Always returns a list of predictions from the top 3 models for that category.
+    Routes the prediction to the correct set of models based on the 'isToddler' flag
+    and returns a list of predictions.
     """
     if not app_data:
         raise HTTPException(status_code=503, detail="Models are not available.")
@@ -83,7 +88,6 @@ def predict(data: ScreeningData):
     artifacts = app_data[model_group]["artifacts"]
     models_to_run = app_data[model_group]["models"]
 
-    # --- Validation ---
     if is_toddler:
         max_age = artifacts["max_toddler_age_months"]
         if data.Age > max_age:
@@ -92,7 +96,6 @@ def predict(data: ScreeningData):
                 detail=f"Invalid age for toddler. Max age is {max_age} months.",
             )
 
-    # --- Preprocessing & Prediction Loop ---
     try:
         processed_df = preprocess_input(user_input_dict, artifacts, is_toddler)
         results = []
@@ -103,8 +106,7 @@ def predict(data: ScreeningData):
                 model, artifacts["preprocessors"]["feature_order"]
             )
 
-            # Reformat model name for clarity
-            clean_name = name.split(" ", 1)[1]  # "1 Adaboost" -> "Adaboost"
+            clean_name = name.split(" ", 1)[1]
 
             results.append(
                 PredictionResult(
@@ -117,12 +119,10 @@ def predict(data: ScreeningData):
         if not results:
             raise ValueError("No predictions were generated.")
 
-        return sorted(
-            results, key=lambda x: x.model_name
-        )  # Sort by name for consistent order
+        # Sort by name to ensure a consistent order in the API response.
+        return sorted(results, key=lambda x: x.model_name)
 
     except Exception as e:
-        # Provide a more specific error message for debugging
         raise HTTPException(
             status_code=500, detail=f"An error occurred during prediction: {str(e)}"
         )

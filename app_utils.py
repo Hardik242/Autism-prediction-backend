@@ -3,22 +3,18 @@ import joblib
 import pandas as pd
 import numpy as np
 
-# --- Constants ---
 TODDLER_MODELS_DIR = "models/toddler"
 GENERAL_MODELS_DIR = "models/general"
 
-# --- Unified Answer and Scoring Logic ---
-SCORE_MAPPING = {
-    "aq_agree_positive": ["Always", "Usually"],
-    "aq_disagree_positive": ["Rarely", "Never"],
-    "toddler_freq_positive": ["Always", "Usually", "Sometimes"],
-    "toddler_freq_negative": ["Rarely", "Never"],
-}
+AQ_AGREE_IS_TRAIT = ["Always", "Usually"]
+AQ_DISAGREE_IS_TRAIT = ["Rarely", "Never"]
+TODDLER_LOW_FREQ_IS_TRAIT = ["Sometimes", "Rarely", "Never"]
+TODDLER_HIGH_FREQ_IS_TRAIT = ["Always", "Usually", "Sometimes"]
 
 
 def load_all_models_and_artifacts():
     """
-    Loads the top 3 toddler and general models and their artifacts at startup.
+    Loads all models and artifacts from their respective directories at startup.
     """
     app_data = {"toddler": {"models": {}}, "general": {"models": {}}}
     try:
@@ -69,30 +65,42 @@ def load_all_models_and_artifacts():
 
 
 def convert_user_input_to_scores(user_input, is_toddler):
+    """
+    Converts unified text-based answers into 0 or 1 scores using the
+    definitively correct scoring logic for each age group.
+    This version does NOT strip or lowercase the input data.
+    """
     scores = {}
     for i in range(1, 11):
         key = f"A{i}_Score"
-        answer = user_input.get(key)
+
+        answer = user_input.get(key, "")
+
         score = 0
+
         if is_toddler:
-            if i in [7, 9]:
-                if answer in SCORE_MAPPING["toddler_freq_negative"]:
+            if i <= 9:
+                if answer in TODDLER_LOW_FREQ_IS_TRAIT:
                     score = 1
             else:
-                if answer in SCORE_MAPPING["toddler_freq_positive"]:
+                if answer in TODDLER_HIGH_FREQ_IS_TRAIT:
                     score = 1
         else:
             if i in [1, 7, 8, 10]:
-                if answer in SCORE_MAPPING["aq_agree_positive"]:
+                if answer in AQ_AGREE_IS_TRAIT:
                     score = 1
             else:
-                if answer in SCORE_MAPPING["aq_disagree_positive"]:
+                if answer in AQ_DISAGREE_IS_TRAIT:
                     score = 1
         scores[key] = score
+
     return scores
 
 
 def preprocess_input(user_input_dict, artifacts, is_toddler):
+    """
+    Preprocesses user input using the correct artifacts for the age group.
+    """
     if is_toddler:
         user_input_dict["Age_Mons"] = user_input_dict.pop("Age")
 
@@ -130,6 +138,9 @@ def preprocess_input(user_input_dict, artifacts, is_toddler):
 
 
 def get_feature_importance_explanation(model, feature_names):
+    """
+    Gets the top 5 most important features from a model.
+    """
     if hasattr(model, "feature_importances_"):
         indices = np.argsort(model.feature_importances_)[::-1]
         return [feature_names[i] for i in indices[:5]]
