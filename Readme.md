@@ -6,7 +6,7 @@
       after empirical testing revealed that a single generalized model was unreliable for different age demographics.
 </p>
 <p><strong>Frontend Repository:</strong> <a
-            href="https://www.google.com/search?q=https://github.com/Hardik242/Autism-screening-frontend"
+            href="https://github.com/Hardik242/Autism-screening-frontend"
             title="null">Autism-screening-frontend</a></p>
 <h2>✨ Core Features</h2>
 <ul>
